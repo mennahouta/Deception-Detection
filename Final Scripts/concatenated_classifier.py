@@ -1,18 +1,21 @@
 # region Imports
 import cv2
 import glob
-import keras
-import numpy as np
 
 from tqdm import tqdm
 
 from keras import Model
-from keras.layers import (Conv3D, Dense, Flatten,
-                          MaxPooling3D, Lambda)
+import keras
+from keras.layers import (Conv3D, Dense, Flatten, MaxPooling3D, Lambda)
+
 from keras.layers.merge import concatenate
 from keras.models import load_model
-from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+import numpy as np
+from numpy import save
+from numpy import load
+import scipy
 from scipy import ndimage
 from sklearn.metrics import accuracy_score
 # endregion
@@ -25,6 +28,25 @@ FLAG_TO_GRAY = False
 
 
 # region Helper Functions
+def get_volumes_micro_exps(micro_exps, num_of_volumes):
+    """
+    Original shape: (692, 39)
+    N = 692 * num_of_volumes
+    Transformed shape: [(N, 13, 1, 1, 1), (N, 13, 1, 1, 1), (N, 13, 1, 1, 1)]
+    So they can be concatenated with the other FC inputs which are of shapes (None, 13, 1, 1, 1)
+    """
+    volumes_micro_expressions = []
+    for micro_expressions in micro_exps:
+        for i in range(num_of_volumes):
+            volumes_micro_expressions.append(micro_expressions)
+    volumes_micro_expressions = np.asarray(volumes_micro_expressions, dtype='float32')
+    print("Volumes' Micros shape: ", volumes_micro_expressions.shape)
+    micro_exps_first_13 = volumes_micro_expressions[:, :13].reshape(-1, 13, 1, 1, 1)
+    micro_exps_second_13 = volumes_micro_expressions[:, 13:13*2].reshape(-1, 13, 1, 1, 1)
+    micro_exps_third_13 = volumes_micro_expressions[:, 13*2:].reshape(-1, 13, 1, 1, 1)
+    return [micro_exps_first_13, micro_exps_second_13, micro_exps_third_13]
+
+
 def get_clips_paths(folder_path: str, extension: str) -> (list, list):
     """
     ## Build the Clips into Lists
@@ -79,74 +101,17 @@ def read_cropped_frames(clip_paths: list, resize_shape: tuple = (40, 60), f_conv
         # resizing the frame to (60 * 40)
         cur_frame = cv2.resize(cur_frame, resize_shape)
         # write the converted gray frame into the output video.
-        # cv2_imshow(cur_frame)
         cur_frame_arr = np.array(cur_frame.tolist(), dtype='uint8')
         clip.append(cur_frame_arr)
     cv2.destroyAllWindows()
     return clip
 
 
-def read_videos(video_paths: list) -> list:
-    """
-    ## Loading Videos
-    * This functions loads the videos and returns them in a list.
-    """
-    videos = []
-    for video_path in video_paths:
-        videos.append(cv2.VideoCapture(video_path))
-    cv2.destroyAllWindows()
-    return videos
-
-
-def video_labeling(video_paths: list) -> list:
-    """
-    ## Label Extraction
-    * based on the videos names we assign a label, 0 for deceptive and 1 for truthful.
-    """
-    video_label = []
-    for video_path in video_paths:
-        if 'lie' in video_path:
-            video_label.append(0)
-        else:
-            video_label.append(1)
-    return video_label
-
-
-def rgb2gray(rgb_videos: list, resize_shape: tuple = (40, 60)) -> list:
-    """
-    ## Converting RGB videos to gray-scale
-    * this function takes a list of videos and returns a list of gray-scale videos.
-    """
-    gray_videos = []
-    for video in rgb_videos:
-        # Read the first frame to find the original video attributes.
-        ret, first_frame = video.read()
-        cur_video_frames = []
-        while video.isOpened():
-            # Reading the next frame.
-            ret, cur_frame = video.read()
-            if not ret:
-                break
-                # Convert the RGB frame to gray-scale.
-            cur_frame = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2GRAY)
-            # resizing the frame to (60 * 40)
-            cur_frame = cv2.resize(cur_frame, resize_shape)
-            # write the converted gray frame into the output video.
-            cur_video_frames.append(cur_frame.tolist())
-            # show the converted frame for testing
-            # cv2_imshow(cur_frame)
-
-            # to insure that there's more frames to be read.
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-        # closing the opened video.
-        video.release()
-        # delete all opened frames.
-        cv2.destroyAllWindows()
-        # append the converted video to the list of videos to be returned.
-        gray_videos.append(cur_video_frames)
-
-    return gray_videos
+def to_one_hot(data_y):
+    data_hot = np.zeros((data_y.shape[0], 2), dtype='uint8')
+    data_hot[:, 0] = (data_y == 0)
+    data_hot[:, 1] = (data_y == 1)
+    return data_hot
 # endregion
 
 
@@ -367,12 +332,12 @@ def FC(input:list):
     return output
 
 
-def _3DCNN():
-    """
-    Complete Model Architecture
-    """
-    # without hardwired included
+# without hardwired included
+def ConcatenatedModel():
     input = keras.layers.Input(shape=(33, 60, 40, 1))
+    micro_exps0 = keras.layers.Input(shape=(13, 1, 1, 1))
+    micro_exps1 = keras.layers.Input(shape=(13, 1, 1, 1))
+    micro_exps2 = keras.layers.Input(shape=(13, 1, 1, 1))
     # 1st ConvLayer
     C2_set1 = C2(input)
     C2_set2 = C2(input)
@@ -403,15 +368,16 @@ def _3DCNN():
     C6_set5 = C6(C4_set5)
     C6_set6 = C6(C4_set6)
     # Fully-connected layer
-    FC_input = concatenate([C6_set1, C6_set2, C6_set3, C6_set4, C6_set5, C6_set6], axis=1)
+    to_conc_list = [C6_set1, C6_set2, C6_set3, C6_set4, C6_set5, C6_set6, micro_exps0, micro_exps1, micro_exps2]
+    FC_input = concatenate(to_conc_list, axis=1)
 
     FC_out = FC(FC_input)
     # Output Layer
     output = Dense(units=2, activation='softmax')(FC_out)
-    return Model(inputs=input, outputs=output)
+    return Model(inputs=[input, micro_exps0, micro_exps1, micro_exps2], outputs=output)
 
 
-def test(model, x_test, y_test, clips_mapping):
+def test(model, x_test, y_test, clips_mapping, micros_test):
     """
     A function that inputs the clips and their actual prediction
     and the mapping of the videos to the clips. The videos'
@@ -442,7 +408,11 @@ def test(model, x_test, y_test, clips_mapping):
         num_clips = clips_mapping[i, 0]
         num_volumes = clips_mapping[i, 1]
         num_cells = num_clips * num_volumes
-        y_pred = model.predict(x_test[prev_batch_index:(prev_batch_index + num_cells)])
+        y_pred = model.predict([x_test[prev_batch_index:(prev_batch_index + num_cells)],
+                                micros_test[0][prev_batch_index:(prev_batch_index + num_cells)],
+                                micros_test[1][prev_batch_index:(prev_batch_index + num_cells)],
+                                micros_test[2][prev_batch_index:(prev_batch_index + num_cells)]
+                                ])
         classes = np.argmax(y_pred, axis=1)
         class_pred = 0  # Deceptive
         if np.sum(classes)*2 >= classes.shape[0]:
@@ -456,7 +426,24 @@ def test(model, x_test, y_test, clips_mapping):
 # endregion
 
 
-def H1_preprocessing(input_videos, video_label, mapping):
+def build_model():
+    model = ConcatenatedModel()
+    early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='min')
+    file_path = "weights.best.hdf5"
+    mcp_save = ModelCheckpoint(file_path, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
+    reduce_lr_loss = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5, verbose=1, min_delta=1e-4,
+                                       mode='min')
+    callbacks_lst = [early_stopping, mcp_save, reduce_lr_loss]
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.summary()
+    return model, callbacks_lst
+
+
+def H1_preprocessing(input_videos, video_label, mapping, micro_expressions):
+    """
+    Example on micro_expressions:
+    micro_expressions = load("/content/gdrive/My Drive/Team's Drive/3DCNN Numpys/test_micro_exps.npy")
+    """
     step = 6
     inside_step = 2
 
@@ -496,32 +483,25 @@ def H1_preprocessing(input_videos, video_label, mapping):
     data_x = data_x.reshape((N, 33, 60, 40, 1))
     data_y = data_y.reshape((N, 2))
 
-    return data_x, data_y, vid_mapping
+    # Micro-Expressions
+    micro_expressions = get_volumes_micro_exps(micro_expressions, num_of_volumes)
+    return data_x, data_y, vid_mapping, micro_expressions
 
 
-def build_model():
-    model = _3DCNN()
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='min')
-    file_path = "weights.best.hdf5"
-    mcp_save = ModelCheckpoint(file_path, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
-    reduce_lr_loss = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5, verbose=1, min_delta=1e-4,
-                                       mode='min')
-    callbacks_lst = [early_stopping, mcp_save, reduce_lr_loss]
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    model.summary()
-    return model, callbacks_lst
-
-
-def train_model(input_videos, video_label, mapping, val_x=None, val_y=None, return_best=False):
-    data_x, data_y, data_mapping = H1_preprocessing(input_videos, video_label, mapping)
+def train_model(input_videos, video_label, mapping, micro_expressions,
+                val_x=None, val_micro=None, val_y=None, return_best=False):
+    data_x, data_y, data_mapping, data_micro = H1_preprocessing(input_videos, video_label, mapping, micro_expressions)
     model, callbacks_lst = build_model()
 
-    if val_x is not None and val_y is not None:
-        hist = model.fit(data_x, data_y, validation_data=(val_x, val_y), batch_size=2, epochs=20, verbose=2,
+    if val_x is not None and val_y is not None and val_micro is not None:
+        hist = model.fit([data_x, data_micro[0], data_micro[1], data_micro[2]], data_y,
+                         validation_data=([val_x, val_micro[0], val_micro[1], val_micro[2]], val_y),
+                         batch_size=2, epochs=20, verbose=2,
                          shuffle=True, callbacks=callbacks_lst)
         print(hist)
     else:
-        hist = model.fit(data_x, data_y, batch_size=2, epochs=20, verbose=2,
+        hist = model.fit([data_x, data_micro[0], data_micro[1], data_micro[2]], data_y,
+                         batch_size=2, epochs=20, verbose=2,
                          shuffle=True, callbacks=callbacks_lst)
         print(hist)
 
@@ -532,12 +512,16 @@ def train_model(input_videos, video_label, mapping, val_x=None, val_y=None, retu
 
 
 def test_model(model, test_videos, test_video_label, test_mapping_orig):
-    test_x, test_y, test_mapping = H1_preprocessing(test_videos, test_video_label, test_mapping_orig)
-    accuracy, _, predictions = test(model, test_x, test_y, test_mapping)
+    """
+    Call this to generate all the predictions, then
+    choose based on the desired video index
+    """
+    test_x, test_y, test_mapping, test_micro = H1_preprocessing(test_videos, test_video_label, test_mapping_orig)
+    accuracy, _, predictions = test(model, test_x, test_y, test_mapping, test_micro)
     return accuracy, predictions
 
 
-def prepare_data(data_path):
+def prepare_data(data_path, micro_expressions):
     """
     data_path is either
     ["/Dataset_CNN/Train" or "/Dataset_CNN/Test"]
@@ -559,16 +543,16 @@ def prepare_data(data_path):
     clips_data = np.asarray(clips_data)  # input videos
     clips_labels = np.asarray(clips_labels)  # labels of the input
     clips_mapping = np.asarray(clips_mapping)  # mapping of clips to OG video
-    return clips_data, clips_labels, clips_mapping
+    return clips_data, clips_labels, clips_mapping, micro_expressions
 
 
 def save_model(model):
-    model.save("Models/Deception_Classifier_3DCNN.h5")
+    model.save("Models/Deception_Classifier_Conc.h5")
     return
 
 
 def load_previous_model(model_h5_path):
-    # Example: model_h5_path = "Models/Deception_Classifier_3DCNN.h5""
+    # Example: model_h5_path = "Models/Deception_Classifier_Conc.h5""
     model = load_model(model_h5_path)
     return model
 
