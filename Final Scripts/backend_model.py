@@ -18,6 +18,6 @@ hist_eval = full_model.evaluate([input_videos, micro_expressions[0], micro_expre
                                  micro_expressions[2]], video_label, batch_size=8)
 print(hist_eval)
 # [4] Test Model
-_, predictions = conc_c.test(full_model, input_videos, video_label, mapping, micro_expressions)
+_, predictions = concatenated_classifier.test(full_model, input_videos, video_label, mapping, micro_expressions)
 print(predictions)
 # TODO: instead of printing access the predictions list with the index of the choosen video
