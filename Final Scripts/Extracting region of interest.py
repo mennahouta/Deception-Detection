@@ -12,7 +12,8 @@ import cvlib
 
 
 # dataset_path = '/content/gdrive/My Drive/Team\'s Drive/Graduation Project/Project/Dataset'
-dataset_path = "/dataset"
+current_directory = os.getcwd()
+dataset_path = current_directory + "/Dataset"
 # endregion
 
 # region Functions
@@ -21,16 +22,13 @@ dataset_path = "/dataset"
 
 def read_videos(path):
     videos = []
-    videos_fps = []  # frames per second
-    videos_paths = glob.glob(path + '/*[0-9].mp4')
+    videos_paths = glob.glob(path + '/*.mp4')
     videos_paths.sort()
     for video_path in videos_paths:
         video = cv2.VideoCapture(video_path)
-        fps = video.get(cv2.CAP_PROP_FPS)
         videos.append(video)
-        videos_fps.append(fps)
     cv2.destroyAllWindows()
-    return videos, videos_fps
+    return videos
 
 
 def read(video_class):
@@ -120,8 +118,7 @@ def crop_video(frames, width, height, bounding_box):
 
 # region Deceptive
 deceptive_videos = read('lie')
-current_directory = os.getcwd()
-postyolo_dir = current_directory + dataset_path + 'PostYOLO'
+postyolo_dir = current_directory + '/PostYOLO'
 os.mkdir(postyolo_dir)
 deceptive_postyolo_dir = postyolo_dir + '/Deceptive'
 os.mkdir(deceptive_postyolo_dir)
