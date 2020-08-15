@@ -9,12 +9,10 @@ from os.path import isfile, join
 #from google.colab import drive
 #drive.mount('/content/gdrive')
 
-#LESSA EL PATH HATT3EML
-
-dataset_path = 'Dataset'
 maximum_frames = 1440
-train_path = '/content/gdrive/My Drive/Team\'s Drive/Graduation Project/Dataset(Train-Test)/train'
-test_path = '/content/gdrive/My Drive/Team\'s Drive/Graduation Project/Dataset(Train-Test)/test'
+current_dir = os.getcwd()
+train_path = current_dir + '/Dataset(Train-Test)/train'
+test_path = current_dir + '/Dataset(Train-Test)/test'
 
 # I/O related functions.
 def get_inner_paths(path):
@@ -28,6 +26,7 @@ def get_frames(video_path):
     frames = [cv2.imread(frame_path) for frame_path in frame_paths]
     return frames
 
+
 # Video extension with noise related functions.
 def add_frames_with_noise(frames):
     print('\nNumber of frames: ', len(frames))
@@ -39,6 +38,7 @@ def add_frames_with_noise(frames):
         new_frames = frames
     print("New number of frames: ", len(new_frames))
     return new_frames
+
 
 def shrink_video(frames):
     extra_frames_no = len(frames) - maximum_frames 
@@ -65,13 +65,15 @@ def shrink_video(frames):
         index += skipping_rate
     return shrunken_video_frames
 
+
+def extend_video_with_noise(frames):
     original_frames = frames
-    
+
     if len(original_frames) == 0:
         return frames
-    
+
     frames_with_noise = add_noise_to_frames(original_frames)
-    
+
     final_frames = original_frames
     repeat_frames = maximum_frames // len(original_frames)
     i = 0
@@ -84,6 +86,7 @@ def shrink_video(frames):
             final_frames.append(frames_with_noise[i])
             i += 1
     return final_frames
+
 
 def add_noise_to_frames(frames):
     noisy_frames = []
@@ -102,7 +105,7 @@ def add_noise_to_frame(frame):
     noisy_image = np.zeros(frame.shape, np.float32)
 
     if len(frame.shape) == 2:
-        noisy_image = img + gaussian
+        noisy_image = frame + gaussian
     else:
         noisy_image[:, :, 0] = frame[:, :, 0] + gaussian
         noisy_image[:, :, 1] = frame[:, :, 1] + gaussian
@@ -117,7 +120,9 @@ def add_noise_to_frame(frame):
 
     return noisy_frame
 
+
 def save_frames(path, frames):
+    print(path)
     os.mkdir(path)
     for frame_index in range(len(frames)):
         frame_path = path + '/' + str(frame_index).zfill(4) + '.jpg'
@@ -125,30 +130,27 @@ def save_frames(path, frames):
     return
 
 
-#MAIN
+# MAIN
 def main(path, save_path):
     video_paths, video_names = get_inner_paths(path)
-    _, done_names = get_inner_paths('/content/gdrive/My Drive/Team\'s Drive/Graduation Project/Dataset_VGG/train')
     for video_path, video_name in zip(video_paths, video_names):
-        if video_name in done_names:
-            continue
-        print(video_path)
         frames = get_frames(video_path)
         new_frames = add_frames_with_noise(frames)
         save_frames(save_path + '/' + video_name, new_frames)
     return
 
-os.mkdir('/content/train')
-main(train_path, '/content/train')
+vgg19_dir = current_dir + "/Dataset_VGG"
+os.mkdir(vgg19_dir)
+train_vgg19_dir = vgg19_dir + "/Train"
+os.mkdir(train_vgg19_dir)
+main(train_path, train_vgg19_dir)
 
-!cp -r /content/train /content/gdrive/"My Drive"/"Team's Drive"/"Graduation Project"/Dataset_VGG
+test_vgg19_dir = vgg19_dir + "/Test"
+os.mkdir(test_vgg19_dir)
+main(test_path, test_vgg19_dir)
 
-os.mkdir('/content/test')
-main(test_path, '/content/test')
 
-!cp -r /content/test /content/gdrive/"My Drive"/"Team's Drive"/"Graduation Project"/Dataset_VGG
-
-#Validation
+# Validation
 def validate_number_of_frames(path):
     videos_paths, _ = get_inner_paths(path)
     error_paths = []
@@ -159,13 +161,14 @@ def validate_number_of_frames(path):
             error_paths.append(video_path)
     return len(videos_paths), error_paths
 
-number_of_train_vids, error_paths = validate_number_of_frames('/content/gdrive/My Drive/Team\'s Drive/Graduation Project/Dataset_VGG/train')
+
+number_of_train_vids, error_paths = validate_number_of_frames(train_vgg19_dir)
 print('Number of train videos: ', number_of_train_vids)
 print('Number of train videos with wrong number of frames: ', len(error_paths))
 if len(error_paths) != 0:
     print('Error paths: ', error_paths)
 
-number_of_test_vids, error_paths = validate_number_of_frames('/content/gdrive/My Drive/Team\'s Drive/Graduation Project/Dataset_VGG/test')
+number_of_test_vids, error_paths = validate_number_of_frames(test_vgg19_dir)
 print('Number of test videos: ', number_of_test_vids)
 print('Number of test videos with wrong number of frames: ', len(error_paths))
 if len(error_paths) != 0:
