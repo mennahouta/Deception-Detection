@@ -517,7 +517,7 @@ def test_model(model, test_videos, test_video_label, test_mapping_orig):
     choose based on the desired video index
     """
     test_x, test_y, test_mapping, test_micro = H1_preprocessing(test_videos, test_video_label, test_mapping_orig)
-    accuracy, _, predictions = test(model, test_x, test_y, test_mapping, test_micro)
+    accuracy, predictions, _ = test(model, test_x, test_y, test_mapping, test_micro)
     return accuracy, predictions
 
 
