@@ -10,6 +10,7 @@ from statistics import mean
 
 #Reference for outliers code: https://github.com/arshren/MachineLearning/blob/master/Identifying%20outliers.ipynb
 
+
 def get_video_length(video_path):
     clip = VideoFileClip(video_path)
     frames = int(clip.fps * clip.duration)
@@ -26,8 +27,10 @@ def Get_Videos_Length(path):
 
 
 #MAIN
-truthful_videos_length = Get_Videos_Length('Dataset/Clips/Truthful')
-deceptive_videos_length = Get_Videos_Length('Dataset/Clips/Deceptive')
+current_dir = os.getcwd()
+dataset_path = current_dir + "/Dataset/Clips"
+truthful_videos_length = Get_Videos_Length(dataset_path + "/Truthful")
+deceptive_videos_length = Get_Videos_Length(dataset_path + "/Deceptive")
 total_videos_length = []
 total_videos_length.extend(truthful_videos_length)
 total_videos_length.extend(deceptive_videos_length)
@@ -45,18 +48,18 @@ print(mean(average))
 total_videos_length.sort(key=lambda x:x[1])
 print(total_videos_length)
 
-outliers=[]
+"""outliers = []
 def detect_outlier(data_1):
     
-    threshold=3
+    threshold = 3
     mean_1 = np.mean(data_1)
-    std_1 =np.std(data_1)
+    std_1 = np.std(data_1)
        
     for y in data_1:
-        z_score= (y - mean_1)/std_1 
+        z_score = (y - mean_1)/std_1
         if np.abs(z_score) > threshold:
             outliers.append(y)
     return outliers
 
 outlier_datapoints = detect_outlier(total_videos_length)
-print(outlier_datapoints)
+print(outlier_datapoints)"""
