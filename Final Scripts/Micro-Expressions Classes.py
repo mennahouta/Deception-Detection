@@ -1,6 +1,10 @@
 import pandas
+import numpy as np
+import os
+import tensorflow as tf
 
-dataset_path = "dataset"
+current_dir = os.getcwd()
+dataset_path = current_dir + "/Dataset"
 micro_expressions = pandas.read_csv(dataset_path + '/Annotation/Microexpressions.csv')
 micro_expressions.head()
 
@@ -9,13 +13,15 @@ micro_expressions_classes = set()
 print("Micro expressions rows =", len(micro_expressions_merged)) #121
 for micro_expression in micro_expressions_merged:
     micro_expressions_classes.add(micro_expression[20:139].replace(" ", ""))
-print("Unique micro expressions =", len(micro_expressions_classes)) #105
+unique = len(micro_expressions_classes)
+print("Unique micro expressions =", unique) #105
 
-with open('micro_expressions_classes.txt', 'w+') as f:
-    for micro_expression_class in micro_expressions_classes:
-        f.write("%s\n" % micro_expression_class)
+micro_expressions_classes = sorted(micro_expressions_classes)
+micro_expressions_classes_np = np.asarray(micro_expressions_classes)
+with open('micro_expressions_classes.txt', 'w') as f:
+    f.write(np.array2string(micro_expressions_classes_np))
 
-#Creating the labels for deceptive and truthful videos. Label = index of the micro-expression in the numpy array which is written in the file. Then that index converted to be in one-hot encoding.
+# Creating the labels for deceptive and truthful videos. Label = index of the micro-expression in the numpy array which is written in the file. Then that index converted to be in one-hot encoding.
 
 deceptive_labels = []
 truthful_labels = []
@@ -30,7 +36,7 @@ for row in micro_expressions_merged:
 deceptive_labels_onehot = tf.keras.utils.to_categorical(deceptive_labels, num_classes=unique)
 truthful_labels_onehot = tf.keras.utils.to_categorical(truthful_labels, num_classes=unique)
 
-current_directory = os.getcwd()
-os.mkdir(current_directory + dataset_path + '/VGG/Labels')
-np.save(dataset_path + '/VGG/Labels/deceptive_labels.npy', deceptive_labels_onehot)
-np.save(dataset_path + '/VGG/Labels/truthful_labels.npy', truthful_labels_onehot)
+labels_path = current_dir + '/Dataset_VGG/Labels'
+os.mkdir(labels_path)
+np.save(labels_path + '/deceptive_labels.npy', deceptive_labels_onehot)
+np.save(labels_path + '/truthful_labels.npy', truthful_labels_onehot)
