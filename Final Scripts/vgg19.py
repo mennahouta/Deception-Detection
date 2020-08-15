@@ -14,7 +14,8 @@ from tqdm import tqdm
 import tensorflow as tf
 #endregion
 
-dataset_path = '/content/gdrive/My Drive/Team\'s Drive/Graduation Project/Dataset_VGG'
+current_dir = os.getcwd()
+dataset_path = current_dir + "/Dataset_VGG"
 
 #region Functions' definitions.
 
@@ -30,7 +31,7 @@ def get_frames(video_path):
     #frames = [cv2.imread(frame_path) for frame_path in frame_paths]
     frames = []
     frame_num = 0
-    while( frame_num < len(frame_paths)):
+    while frame_num < len(frame_paths):
         frame_path = frame_paths[frame_num]
         frame = cv2.imread(frame_path)
         resized_frame = cv2.resize(frame, (112, 112))
@@ -62,7 +63,10 @@ def read_labels(what='train'):
 
 #region Reading train videos and saving train numpys "Should run only once".
 train_videos, train_video_names = read_dataset()
-!cp train_videos.npy /content/gdrive/"My Drive"/"Team's Drive"/"Graduation Project"/Dataset_VGG
+train_videos_np = np.array([np.array(video) for video in train_videos])
+print(train_videos_np.shape)
+print(type(train_videos_np[0]))
+np.save(dataset_path + "/train_videos.npy", train_videos_np)
 #endregion
 
 #region Reading train numpy array "Run this EVERYTIME before training".
