@@ -207,7 +207,7 @@ def train_model(input_videos, video_label, mapping, val_x=None, val_y=None, retu
 
 def test_model(model, test_videos, test_video_label, test_mapping_orig):
     test_x, test_y, test_mapping = MLP__preprocessing(test_videos, test_video_label, test_mapping_orig)
-    accuracy, _, predictions = test(model, test_x, test_y, test_mapping)
+    accuracy, predictions, _ = test(model, test_x, test_y, test_mapping)
     return accuracy, predictions
 
 
